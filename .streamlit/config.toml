@@ -1,0 +1,20 @@
+[browser]
+gatherUsageStats = false
+
+[theme]
+font = "sans-serif"
+baseRadius = "small"
+
+[theme.light]
+primaryColor = "#1c5cab"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f0efec"
+textColor = "#0b1f3a"
+borderColor = "#e1e0d9"
+
+[theme.dark]
+primaryColor = "#2a78d6"
+backgroundColor = "#1a1a19"
+secondaryBackgroundColor = "#262624"
+textColor = "#f2f5fa"
+borderColor = "#383835"

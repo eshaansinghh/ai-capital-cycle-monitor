@@ -35,3 +35,6 @@ data/processed/*
 Thumbs.db
 .idea/
 .vscode/
+
+# Streamlit local secrets (never committed)
+.streamlit/secrets.toml
