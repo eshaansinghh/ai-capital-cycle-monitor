@@ -21,7 +21,11 @@ import pytest
 
 from ai_capital_cycle_monitor.clients.raw_store import Snapshot
 from ai_capital_cycle_monitor.pipelines.financials import CompanyDataset, build_company_dataset
-from ai_capital_cycle_monitor.utils.config import load_companies, load_xbrl_mappings
+from ai_capital_cycle_monitor.utils.config import (
+    load_companies,
+    load_lease_adjustments,
+    load_xbrl_mappings,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 MILLION = 1_000_000
@@ -57,7 +61,13 @@ def dataset() -> CompanyDataset:
         size_bytes=provenance["source_size_bytes"],
     )
     company = next(c for c in load_companies() if c.ticker == "MSFT")
-    return build_company_dataset(company, load_xbrl_mappings()["MSFT"], facts, snapshot)
+    return build_company_dataset(
+        company,
+        load_xbrl_mappings()["MSFT"],
+        facts,
+        snapshot,
+        lease=load_lease_adjustments()["MSFT"],
+    )
 
 
 def _row(dataset: CompanyDataset, fiscal_year: int, fiscal_quarter: int) -> pd.Series:
@@ -184,7 +194,7 @@ def test_fourth_quarters_are_derived_from_fiscal_2021_and_reported_before(
 
 def test_every_automated_check_passes_on_the_real_data(dataset: CompanyDataset) -> None:
     assert set(dataset.checks["status"]) <= {"pass", "skipped"}
-    assert (dataset.checks["check"] == "quarters_sum_to_year").sum() == 3
+    assert (dataset.checks["check"] == "quarters_sum_to_year").sum() == 5  # one per mapped field
 
 
 def test_registry_rows_cover_every_displayed_series(dataset: CompanyDataset) -> None:
@@ -195,9 +205,105 @@ def test_registry_rows_cover_every_displayed_series(dataset: CompanyDataset) -> 
             "operating_cash_flow",
             "cash_capex",
             "base_fcf",
+            "finance_lease_principal",
+            "finance_lease_assets_acquired",
+            "lease_adjusted_fcf",
+            "capex_incl_finance_leases",
             "capital_intensity",
             "cash_reinvestment_rate",
             "fcf_margin",
             "revenue_yoy_growth",
         )
     }
+
+
+# Lease note, printed in USD millions: (financing cash flows from finance leases, finance-lease
+# assets obtained). Q1/Q3 10-Q three-month columns and their prior-year comparatives.
+PRINTED_LEASE_QUARTERS = {
+    (2026, 1): (639, 9_147),
+    (2025, 1): (802, 4_332),
+    (2026, 3): (839, 4_009),
+    (2025, 3): (352, 3_241),
+}
+PRINTED_LEASE_NINE_MONTHS = {2026: (2_179, 19_486), 2025: (1_634, 14_008)}  # Q3 10-Q
+PRINTED_LEASE_YEARS = {2026: (3_101, 24_608), 2025: (2_283, 20_511), 2024: (1_286, 11_633)}  # 10-K
+
+
+@pytest.mark.parametrize(("period", "printed"), PRINTED_LEASE_QUARTERS.items())
+def test_lease_quarters_match_the_printed_lease_note(
+    dataset: CompanyDataset, period: tuple[int, int], printed: tuple[int, int]
+) -> None:
+    row = _row(dataset, *period)
+    assert _millions(row["finance_lease_principal"]) == printed[0]
+    assert _millions(row["finance_lease_assets_acquired"]) == printed[1]
+    assert row["finance_lease_principal_basis"] == "reported"
+
+
+def test_derived_fourth_quarter_lease_figures_equal_printed_year_minus_nine_months(
+    dataset: CompanyDataset,
+) -> None:
+    row = _row(dataset, 2026, 4)
+    year, nine = PRINTED_LEASE_YEARS[2026], PRINTED_LEASE_NINE_MONTHS[2026]
+    assert _millions(row["finance_lease_principal"]) == year[0] - nine[0] == 922
+    assert _millions(row["finance_lease_assets_acquired"]) == year[1] - nine[1] == 5_122
+    assert row["finance_lease_principal_basis"] == "derived"
+    assert _millions(row["lease_adjusted_fcf"]) == 19_639 - 922 == 18_717
+
+
+@pytest.mark.parametrize("fiscal_year", sorted(PRINTED_LEASE_YEARS))
+def test_lease_quarters_sum_to_the_printed_fiscal_year(
+    dataset: CompanyDataset, fiscal_year: int
+) -> None:
+    year = dataset.quarterly[dataset.quarterly["fiscal_year"] == fiscal_year]
+    assert _millions(year["finance_lease_principal"].sum()) == PRINTED_LEASE_YEARS[fiscal_year][0]
+    assert (
+        _millions(year["finance_lease_assets_acquired"].sum())
+        == PRINTED_LEASE_YEARS[fiscal_year][1]
+    )
+
+
+@pytest.mark.parametrize("fiscal_year", sorted(PRINTED_LEASE_NINE_MONTHS))
+def test_first_three_lease_quarters_sum_to_the_printed_nine_months(
+    dataset: CompanyDataset, fiscal_year: int
+) -> None:
+    nine = dataset.quarterly[
+        (dataset.quarterly["fiscal_year"] == fiscal_year)
+        & (dataset.quarterly["fiscal_quarter"] <= 3)
+    ]
+    principal, assets = PRINTED_LEASE_NINE_MONTHS[fiscal_year]
+    assert _millions(nine["finance_lease_principal"].sum()) == principal
+    assert _millions(nine["finance_lease_assets_acquired"].sum()) == assets
+
+
+def test_lease_adjusted_fcf_is_base_fcf_less_principal_for_every_quarter(
+    dataset: CompanyDataset,
+) -> None:
+    quarterly = dataset.quarterly
+    assert quarterly["lease_adjusted_fcf"].notna().all()
+    assert (
+        quarterly["lease_adjusted_fcf"]
+        == quarterly["base_fcf"] - quarterly["finance_lease_principal"]
+    ).all()
+    assert (quarterly["lease_adjusted_fcf"] <= quarterly["base_fcf"]).all()
+
+
+def test_capital_intensity_and_growth_match_hand_calculation(dataset: CompanyDataset) -> None:
+    row = _row(dataset, 2026, 4)
+    assert row["capital_intensity"] == pytest.approx(35_802 / 90_007)
+    assert row["cash_reinvestment_rate"] == pytest.approx(35_802 / 55_441)
+    assert row["fcf_margin"] == pytest.approx(19_639 / 90_007)
+    year_ago = _row(dataset, 2025, 4)
+    assert row["revenue_yoy_growth"] == pytest.approx(90_007 / (_millions(year_ago["revenue"])) - 1)
+    assert (
+        dataset.quarterly[dataset.quarterly["fiscal_year"] == 2018]["revenue_yoy_growth"]
+        .isna()
+        .all()
+    )
+
+
+def test_reviewed_lease_treatment_is_recorded_on_the_dataset(dataset: CompanyDataset) -> None:
+    assert dataset.lease_adjustment is not None
+    assert (
+        dataset.lease_adjustment.other_infrastructure_financing_payments.value == "none_disclosed"
+    )
+    assert "0001193125-26-323660" in dataset.lease_adjustment.note

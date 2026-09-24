@@ -40,3 +40,29 @@ mappings:
       notes: >-
         Reported as a positive cash outflow ("Additions to property and equipment"). Finance-lease
         principal is a separate financing line and is not included.
+    finance_lease_principal:
+      statement: lease_note_financing_cash_flows
+      expect_non_negative: true
+      first_fiscal_year: 2018
+      candidates:
+        - {taxonomy: us-gaap, tag: FinanceLeasePrincipalPayments}
+    finance_lease_assets_acquired:
+      statement: lease_note_noncash_disclosure
+      expect_non_negative: true
+      first_fiscal_year: 2018
+      candidates:
+        - {taxonomy: us-gaap, tag: RightOfUseAssetObtainedInExchangeForFinanceLeaseLiability}
+
+# Reviewed lease treatments. A company that maps finance_lease_principal must state whether other
+# infrastructure financing payments exist. "none_disclosed" means the filings were reviewed and no
+# such cash-flow line exists; it is a documented finding, not an assumption of zero.
+lease_adjustments:
+  MSFT:
+    other_infrastructure_financing_payments: none_disclosed
+    note: >-
+      Reviewed the fiscal-2026 10-K (accession 0001193125-26-323660). The financing section of the
+      Cash Flows Statements lists debt, common stock issued and repurchased, dividends and "Other,
+      net" only, with no financing-obligation, build-to-suit or equipment-financing line.
+      Principal paid on finance leases is not a statement line: it is disclosed in the lease note
+      as "Financing cash flows from finance leases" and is mapped as finance_lease_principal.
+      Whatever else "Other, net" contains is not disclosed and is not adjusted for.

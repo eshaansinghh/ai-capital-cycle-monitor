@@ -67,21 +67,41 @@ as the fiscal-year total minus the nine-month year-to-date figure. Revenue's Q4 
 directly for fiscal 2018-2020 and is derived from fiscal 2021. The fourth quarters of operating
 cash flow and capex are derived in every fiscal year.
 
-## Caveat: cash capex is not total infrastructure investment
+## Lease and infrastructure financing (Phase 3)
 
-`PaymentsToAcquirePropertyPlantAndEquipment` is cash paid for property and equipment ("Additions to
-property and equipment"). It **excludes assets acquired under finance leases**, which are reported
-separately in the financing section and in the lease note. For a company building data-centre
-capacity partly through finance leases, cash capex understates total infrastructure investment, and
-base FCF overstates the cash left over relative to a lease-adjusted view. This is why the project
-keeps **base FCF and lease-adjusted FCF as separate measures** (see
-[`docs/methodology.md`](methodology.md)). Lease-adjusted FCF is not built in Phase 2, so no
-conclusion about the capital cycle should rest on base FCF alone.
+Microsoft funds infrastructure through cash purchases of property and equipment **and** through
+finance leases. Both are visible in the filings, and they are very different sizes:
+
+| Item (fiscal year, USD millions, as printed in the 10-K lease note) | FY24 | FY25 | FY26 |
+|---|---|---|---|
+| Additions to property and equipment (cash capex) | 44,477 | 64,551 | 115,948 |
+| Financing cash flows from finance leases (principal paid) | 1,286 | 2,283 | 3,101 |
+| Assets obtained under finance leases (non-cash) | 11,633 | 20,511 | 24,608 |
+
+- **`finance_lease_principal`** is mapped to `FinanceLeasePrincipalPayments` (the lease note's
+  "Financing cash flows from finance leases"). It is **not** a Cash Flows Statement line: the
+  financing section lists debt, stock issued and repurchased, dividends and "Other, net" only, so
+  the principal sits inside "Other, net". Six facts per fiscal year, no conflicts or revisions.
+- **`finance_lease_assets_acquired`** is mapped to
+  `RightOfUseAssetObtainedInExchangeForFinanceLeaseLiability` (the lease note's "Finance leases"
+  under assets obtained in exchange for lease obligations). It is non-cash and covers every asset
+  class Microsoft leases, not only data-centre equipment.
+- **Other infrastructure financing payments:** reviewed and none disclosed (see
+  `lease_adjustments` in the mapping). This is a documented finding, not an assumption of zero.
+
+**Reading the two lease measures.** `lease_adjusted_fcf` follows the methodology definition (base
+FCF less finance-lease *principal paid*), so it is a cash measure and barely differs from base FCF:
+fiscal 2026 Q4 base FCF is 19,639m and lease-adjusted FCF is 18,717m. The much larger effect is on
+the investment side: fiscal 2026 assets obtained under finance leases (24,608m) equal about a fifth
+of cash capex (115,948m), and they create future principal payments that the cash measure has not
+yet recorded. The supplementary `capex_incl_finance_leases` (cash capex plus assets obtained under
+finance leases) shows that scale, and it is labelled an upper bound because the lease figure is not
+limited to data-centre assets. Neither series alone says how much of the buildout is AI-specific.
 
 ## Open items
 
-- Finance-lease principal and other infrastructure financing payments are not yet mapped
-  (Phase 3, for the lease-adjusted measure).
+- Whatever is inside "Other, net" beyond finance-lease principal is not disclosed and is not
+  adjusted for.
 - Microsoft's non-GAAP "capital expenditures including finance leases" appears in earnings
   releases (company IR material), not in XBRL, and is not used here.
 - Each new company needs its own `audit-tags` run before a mapping is written. Do not copy this

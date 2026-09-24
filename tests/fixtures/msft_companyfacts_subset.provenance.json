@@ -10,7 +10,9 @@
     "Revenues": 0,
     "NetCashProvidedByUsedInOperatingActivities": 108,
     "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations": 1,
-    "PaymentsToAcquirePropertyPlantAndEquipment": 109
+    "PaymentsToAcquirePropertyPlantAndEquipment": 109,
+    "FinanceLeasePrincipalPayments": 109,
+    "RightOfUseAssetObtainedInExchangeForFinanceLeaseLiability": 109
   },
   "note": "Entries are copied verbatim. Only 'description' and unmapped tags are omitted."
 }

@@ -65,6 +65,25 @@ different filings.
 The fiscal 2024 and 2025 totals come from the same 10-K's comparative columns, and they test the
 period alignment and Q4 derivation across three fiscal years, not only the latest.
 
+## D. Lease note (Phase 3, USD millions)
+
+Lines read from the lease note of the same three filings: "Financing cash flows from finance
+leases" (principal paid) and "Finance leases" under assets obtained in exchange for lease
+obligations. Every figure matches the pipeline with zero difference.
+
+| Period | Principal paid (printed / pipeline) | Assets obtained (printed / pipeline) |
+|---|---|---|
+| FY26 Q1 (Q1 10-Q, three months) | 639 / 639 | 9,147 / 9,147 |
+| FY25 Q1 (comparative) | 802 / 802 | 4,332 / 4,332 |
+| FY26 Q3 (Q3 10-Q, three months) | 839 / 839 | 4,009 / 4,009 |
+| FY25 Q3 (comparative) | 352 / 352 | 3,241 / 3,241 |
+| FY26 nine months (Q1+Q2+Q3) | 2,179 / 2,179 | 19,486 / 19,486 |
+| FY25 nine months (Q1+Q2+Q3) | 1,634 / 1,634 | 14,008 / 14,008 |
+| FY26 Q4 = year - nine months | 3,101 - 2,179 = 922 / 922 | 24,608 - 19,486 = 5,122 / 5,122 |
+| FY26 / FY25 / FY24 four quarters summed | 3,101 / 2,283 / 1,286 | 24,608 / 20,511 / 11,633 |
+
+Lease-adjusted FCF for FY26 Q4 is 19,639 - 922 = 18,717.
+
 ## What this does and does not show
 
 - **Shows:** the pipeline reads the right facts, picks the right periods, applies the sign
