@@ -1,0 +1,16 @@
+{
+  "source_url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001652044.json",
+  "retrieved_at_utc": "2026-09-24T21:29:04.831072+00:00",
+  "source_sha256": "a017f26ee88cb4a639d1c1ddb06d53b4afe22f0ac89cabec7cd67c88919fe1c5",
+  "source_size_bytes": 3164517,
+  "filter": "forms ['10-K', '10-K/A', '10-Q', '10-Q/A']; duration facts with period end >= 2017-01-01",
+  "entries_per_tag": {
+    "Revenues": 47,
+    "RevenueFromContractWithCustomerExcludingAssessedTax": 86,
+    "NetCashProvidedByUsedInOperatingActivities": 79,
+    "PaymentsToAcquirePropertyPlantAndEquipment": 93,
+    "FinanceLeasePrincipalPayments": 22,
+    "RightOfUseAssetObtainedInExchangeForFinanceLeaseLiability": 22
+  },
+  "note": "Entries are copied verbatim. Only 'description' and unmapped tags are omitted."
+}
