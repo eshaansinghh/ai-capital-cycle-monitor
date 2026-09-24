@@ -104,8 +104,9 @@ def find_text(
         match = matcher.search(line)
         if not match:
             continue
-        start = max(match.start() - width // 2, 0)
-        found.append((index + 1, line[start : start + width]))
+        room = max(width - len(match.group()), 0)
+        start = max(match.start() - room // 2, 0)
+        found.append((index + 1, line[start : start + max(width, len(match.group()))]))
         if len(found) == limit:
             break
     return found
