@@ -5,13 +5,11 @@ year. It exercises code paths and is never company data.
 """
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from ai_capital_cycle_monitor.clients.raw_store import Snapshot
 from ai_capital_cycle_monitor.pipelines.datasets import (
     read_checks,
     read_long,
@@ -24,87 +22,13 @@ from ai_capital_cycle_monitor.pipelines.financials import (
     series_id,
 )
 from ai_capital_cycle_monitor.pipelines.identity import IdentityCheck, IdentityReport
-from ai_capital_cycle_monitor.schemas.config import Company
 from ai_capital_cycle_monitor.schemas.provenance import DataBasis
-from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField, FieldMapping, TagRef
-
-COMPANY = Company.model_validate(
-    {
-        "ticker": "TEST",
-        "name": "Test Co",
-        "role": "hyperscaler",
-        "exchange": "TESTX",
-        "currency": "USD",
-        "filer_type": "domestic_10k",
-        "cik": "0000000001",
-        "fiscal_year_end_month": 6,
-    }
-)
-SNAPSHOT = Snapshot(
-    path=Path("unused"),
-    url="https://data.sec.gov/api/xbrl/companyfacts/CIK0000000001.json",
-    retrieved_at_utc=datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC),
-    http_status=200,
-    sha256="a" * 64,
-    size_bytes=1,
-)
-MAPPINGS = {
-    CanonicalField.REVENUE: FieldMapping(
-        statement="income", expect_non_negative=True, candidates=[TagRef(taxonomy="t", tag="Rev")]
-    ),
-    CanonicalField.OPERATING_CASH_FLOW: FieldMapping(
-        statement="cash_flow", candidates=[TagRef(taxonomy="t", tag="Ocf")]
-    ),
-    CanonicalField.CASH_CAPEX: FieldMapping(
-        statement="cash_flow",
-        expect_non_negative=True,
-        candidates=[TagRef(taxonomy="t", tag="Capex")],
-    ),
-}
-FY_START = "2024-07-01"
-ENDS = ["2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30"]
+from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField
+from synthetic import COMPANY, ENDS, FY_START, MAPPINGS, SNAPSHOT, payload
 
 
-def _entry(start: str, end: str, value: int, n: int) -> dict[str, object]:
-    return {
-        "start": start,
-        "end": end,
-        "val": value,
-        "accn": f"0000000000-25-00000{n}",
-        "fy": 2025,
-        "fp": "Q1",
-        "form": "10-K" if end == ENDS[3] else "10-Q",
-        "filed": "2025-08-01" if end == ENDS[3] else "2025-01-15",
-    }
-
-
-def _cumulative(values: list[int | None]) -> list[dict[str, object]]:
-    return [
-        _entry(FY_START, end, value, n)
-        for n, (end, value) in enumerate(zip(ENDS, values, strict=True), start=1)
-        if value is not None
-    ]
-
-
-def _payload(capex: list[int | None] | None = None) -> dict[str, object]:
-    revenue = [
-        _entry(FY_START, ENDS[0], 100, 1),  # standalone Q1
-        _entry("2024-10-01", ENDS[1], 110, 2),  # standalone Q2
-        _entry("2025-01-01", ENDS[2], 120, 3),  # standalone Q3
-        _entry(FY_START, ENDS[1], 210, 2),  # six-month year-to-date
-        _entry(FY_START, ENDS[2], 330, 3),  # nine-month year-to-date
-        _entry(FY_START, ENDS[3], 460, 4),  # fiscal year
-    ]
-    facts = {
-        "Rev": {"units": {"USD": revenue}},
-        "Ocf": {"units": {"USD": _cumulative([40, 90, 150, 220])}},
-        "Capex": {"units": {"USD": _cumulative(capex or [10, 25, 45, 70])}},
-    }
-    return {"facts": {"t": facts}}
-
-
-def _build(payload: dict[str, object] | None = None, **kwargs: object):
-    return build_company_dataset(COMPANY, MAPPINGS, payload or _payload(), SNAPSHOT, **kwargs)
+def _build(data: dict[str, object] | None = None, **kwargs: object):
+    return build_company_dataset(COMPANY, MAPPINGS, data or payload(), SNAPSHOT, **kwargs)
 
 
 def test_quarterly_table_has_values_and_standardised_base_fcf() -> None:
@@ -125,7 +49,7 @@ def test_basis_is_kept_per_observation_and_base_fcf_is_derived() -> None:
 
 
 def test_missing_component_gives_missing_base_fcf_not_zero() -> None:
-    quarterly = _build(_payload(capex=[10, 25, None, 70])).quarterly
+    quarterly = _build(payload(capex=[10, 25, None, 70])).quarterly
     assert quarterly["cash_capex"].isna().tolist() == [False, False, True, True]
     assert quarterly["base_fcf"].isna().tolist() == [False, False, True, True]
     assert quarterly["base_fcf_basis"].isna().tolist() == [False, False, True, True]
@@ -183,23 +107,23 @@ def test_checks_table_has_typed_columns() -> None:
 
 
 def test_field_without_observations_is_an_error() -> None:
-    payload = _payload()
-    payload["facts"]["t"]["Capex"] = {"units": {"USD": []}}  # type: ignore[index]
+    data = payload()
+    data["facts"]["t"]["Capex"] = {"units": {"USD": []}}  # type: ignore[index]
     with pytest.raises(DatasetError, match="cash_capex"):
-        _build(payload)
+        _build(data)
 
 
 def test_missing_mapping_or_cik_is_an_error() -> None:
     partial = {CanonicalField.REVENUE: MAPPINGS[CanonicalField.REVENUE]}
     with pytest.raises(DatasetError, match="no XBRL mapping"):
-        build_company_dataset(COMPANY, partial, _payload(), SNAPSHOT)
+        build_company_dataset(COMPANY, partial, payload(), SNAPSHOT)
     no_cik = COMPANY.model_copy(update={"cik": None})
     with pytest.raises(DatasetError, match="no CIK"):
-        build_company_dataset(no_cik, MAPPINGS, _payload(), SNAPSHOT)
+        build_company_dataset(no_cik, MAPPINGS, payload(), SNAPSHOT)
 
 
 def test_parquet_round_trip_preserves_values_and_missing(tmp_path: Path) -> None:
-    dataset = _build(_payload(capex=[10, 25, None, 70]))
+    dataset = _build(payload(capex=[10, 25, None, 70]))
     write_dataset(dataset, tmp_path)
     quarterly = read_quarterly(tmp_path, "TEST")
     assert quarterly is not None
