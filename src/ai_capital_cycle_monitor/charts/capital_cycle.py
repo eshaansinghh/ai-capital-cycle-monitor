@@ -22,7 +22,7 @@ BILLION = 1e9
 NOTE_WIDTH = 120
 CROWDED_QUARTERS = 16  # above this, axis labels drop the month and rotate
 HEIGHT = 520
-MARGIN_TOP = 140
+MARGIN_TOP = 112
 NOTE_PADDING = 6
 
 
@@ -150,6 +150,8 @@ def quarterly_cash_cycle_figure(
             "subtitle": {"text": subtitle, "font": {"size": 12, "color": theme.ink_secondary}},
             "x": 0,
             "xanchor": "left",
+            "y": 0.985,
+            "yanchor": "top",
             "font": {"size": 17, "color": theme.ink},
         },
         barmode="group",
