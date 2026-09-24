@@ -63,7 +63,10 @@ with st.container(horizontal=True, vertical_alignment="bottom"):
         "Hatch derived quarters",
         value=True,
         key="capital_cycle_hatch",
-        help="Cash-flow statements are cumulative, so most quarters are year-to-date differences.",
+        help=(
+            "Fourth quarters are not reported on their own, so they are derived as the "
+            "fiscal-year total minus the nine-month figure."
+        ),
     )
 
 with st.container(horizontal=True):
@@ -114,9 +117,10 @@ with st.expander("Definitions and method", icon=":material/functions:"):
         "- **Base FCF** = operating cash flow - cash capex (cash purchases of property and "
         "equipment). This is a standardised measure calculated here, not a company-reported "
         "figure.\n"
-        "- **Reported vs derived.** Income-statement items are reported per quarter. Cash-flow "
-        "statements are cumulative from the start of the fiscal year and no filing reports the "
-        "fourth quarter alone, so those quarters are differences of cumulative facts.\n"
+        "- **Reported vs derived.** A three-month figure that a filing reports is used as "
+        "reported. The fourth quarter is not reported on its own in the annual filing, so it is "
+        "derived as the fiscal-year total minus the nine-month year-to-date figure. Those bars "
+        "are hatched.\n"
         "- **Fiscal calendar.** Microsoft's fiscal year ends 30 June: FY26 Q1 is "
         "July-September 2025.\n"
         "- **First reported.** Where several filings report the same period, the earliest is "

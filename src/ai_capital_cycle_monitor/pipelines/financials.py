@@ -219,7 +219,8 @@ def _registry_records(
                 unit=mapping.unit,
                 reported_or_estimated=DataBasis.DERIVED if derived else DataBasis.REPORTED,
                 transformation=(
-                    "Quarters without a reported three-month fact are year-to-date differences. "
+                    "Where no three-month fact is reported (typically the fourth quarter), the "
+                    "quarter is the difference of two cumulative year-to-date facts. "
                     "Per-observation basis and component facts are in the dataset."
                     if derived
                     else "Reported three-month values."
