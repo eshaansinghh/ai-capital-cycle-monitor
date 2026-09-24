@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments and tool caches
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Secrets and local configuration (only the template is tracked)
+.env
+.env.*
+!.env.example
+
+# HTTP caches
+.cache/
+*.sqlite
+
+# Data: only directory markers are tracked. Contents are local, reproducible
+# outputs and may be licensed, so they never enter Git. See data/README.md.
+data/raw/*
+data/interim/*
+data/processed/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
