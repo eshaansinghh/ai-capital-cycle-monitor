@@ -292,21 +292,48 @@ def _identity_checks(report: IdentityReport) -> list[CheckResult]:
 
 
 def _lease_checks(quarterly: pd.DataFrame) -> list[CheckResult]:
-    """Every quarter that has base FCF should also have a lease-adjusted figure."""
-    gaps = quarterly[quarterly["base_fcf"].notna() & quarterly["lease_adjusted_fcf"].isna()]
+    """Coverage of lease-adjusted FCF.
+
+    Quarters before the company's first lease disclosure are "not disclosed" (reported once, not a
+    defect and never assumed zero). Gaps after disclosure begins are warnings.
+    """
+    first = quarterly["finance_lease_principal"].first_valid_index()
+    if first is None:
+        return []
+    position = quarterly.index.get_loc(first)
+    label = f"{quarterly['fiscal_label'].iloc[position]}"
+    checks: list[CheckResult] = []
+    before = quarterly.iloc[:position]
+    undisclosed = int(before["base_fcf"].notna().sum())
+    if undisclosed:
+        checks.append(
+            CheckResult(
+                "lease_disclosure_starts",
+                "lease_adjusted_fcf",
+                None,
+                None,
+                CheckStatus.SKIPPED,
+                f"finance-lease cash flows are first disclosed for {label}; {undisclosed} earlier "
+                "quarters have base FCF but no lease-adjusted FCF (not disclosed, not assumed "
+                "zero)",
+            )
+        )
+    after = quarterly.iloc[position:]
+    gaps = after[after["base_fcf"].notna() & after["lease_adjusted_fcf"].isna()]
     if gaps.empty:
-        checked = int(quarterly["lease_adjusted_fcf"].notna().sum())
-        return [
+        checks.append(
             CheckResult(
                 "lease_adjustment_coverage",
                 "lease_adjusted_fcf",
                 None,
                 None,
                 CheckStatus.PASS,
-                f"{checked} quarters have lease-adjusted FCF wherever base FCF exists",
+                f"{int(after['lease_adjusted_fcf'].notna().sum())} quarters from {label} have "
+                "lease-adjusted FCF wherever base FCF exists",
             )
-        ]
-    return [
+        )
+        return checks
+    checks.extend(
         CheckResult(
             "lease_adjustment_coverage",
             "lease_adjusted_fcf",
@@ -316,7 +343,8 @@ def _lease_checks(quarterly: pd.DataFrame) -> list[CheckResult]:
             "base FCF exists but a lease component is missing, so lease-adjusted FCF is missing",
         )
         for _, row in gaps.iterrows()
-    ]
+    )
+    return checks
 
 
 def _registry_records(

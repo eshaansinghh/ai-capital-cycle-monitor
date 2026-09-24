@@ -192,3 +192,23 @@ def test_ratio_columns_follow_the_formulas() -> None:
     assert quarterly["fcf_margin"].tolist() == pytest.approx(
         [30 / 100, 35 / 110, 40 / 120, 45 / 130]
     )
+
+
+def test_quarters_before_the_first_lease_disclosure_are_not_disclosed_rather_than_defects() -> None:
+    base = with_prior_year(payload(), scale=0.5)  # fiscal 2024 and 2025
+    facts = with_lease_facts(
+        base, principal=PRINCIPAL, assets=ASSETS
+    )  # lease facts: fiscal 2025 only
+    dataset = build_company_dataset(COMPANY, LEASE_MAPPINGS, facts, SNAPSHOT, lease=NONE_DISCLOSED)
+    quarterly = dataset.quarterly
+    assert quarterly["finance_lease_principal"].isna().tolist() == [True] * 4 + [False] * 4
+    assert quarterly["lease_adjusted_fcf"].isna().tolist() == [True] * 4 + [False] * 4
+    assert quarterly["base_fcf"].notna().all()
+    checks = dataset.checks
+    starts = checks[checks["check"] == "lease_disclosure_starts"].iloc[0]
+    assert starts["status"] == "skipped"
+    assert "FY25 Q1" in starts["detail"] and "4 earlier quarters" in starts["detail"]
+    assert "not assumed zero" in starts["detail"]
+    coverage = checks[checks["check"] == "lease_adjustment_coverage"]
+    assert coverage["status"].tolist() == ["pass"]
+    assert not (checks["status"] == "warn").any()
