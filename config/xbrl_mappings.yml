@@ -1,0 +1,42 @@
+# Per-company XBRL tag mappings. Candidates are listed in priority order. For each exact period the
+# first candidate that reports it is used, the tag chosen is stored with every value, and any
+# lower-priority candidate that reports a different value is flagged (never silently ignored).
+#
+# Every entry here comes from `ai-capital-cycle audit-tags <TICKER>` against the company's real
+# Company Facts, not from assumption. The evidence and the decisions are written up in
+# docs/xbrl_mapping_msft.md.
+mappings:
+  MSFT:
+    revenue:
+      statement: income_statement
+      expect_non_negative: true
+      first_fiscal_year: 2018
+      candidates:
+        - {taxonomy: us-gaap, tag: RevenueFromContractWithCustomerExcludingAssessedTax}
+        - {taxonomy: us-gaap, tag: SalesRevenueNet}
+        - {taxonomy: us-gaap, tag: Revenues}
+      notes: >-
+        Total revenue was tagged Revenues (to 2010), SalesRevenueNet (2009 to 2018) and
+        RevenueFromContractWithCustomerExcludingAssessedTax (2016 onward, after ASC 606 was
+        adopted). In fiscal 2016-2017 the recast and the original values disagree, so the history
+        starts in fiscal 2018, the first year reported on the new basis, where one tag supplies
+        every fact with no conflicts. SalesRevenueGoodsNet is a component, not the total, and is
+        excluded.
+    operating_cash_flow:
+      statement: cash_flow_statement
+      first_fiscal_year: 2018
+      candidates:
+        - {taxonomy: us-gaap, tag: NetCashProvidedByUsedInOperatingActivities}
+        - {taxonomy: us-gaap, tag: NetCashProvidedByUsedInOperatingActivitiesContinuingOperations}
+      notes: >-
+        The continuing-operations variant was used only in fiscal 2014-2017. From fiscal 2018 the
+        plain tag supplies every fact.
+    cash_capex:
+      statement: cash_flow_statement
+      expect_non_negative: true
+      first_fiscal_year: 2018
+      candidates:
+        - {taxonomy: us-gaap, tag: PaymentsToAcquirePropertyPlantAndEquipment}
+      notes: >-
+        Reported as a positive cash outflow ("Additions to property and equipment"). Finance-lease
+        principal is a separate financing line and is not included.

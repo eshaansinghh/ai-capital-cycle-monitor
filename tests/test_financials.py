@@ -131,3 +131,29 @@ def test_parquet_round_trip_preserves_values_and_missing(tmp_path: Path) -> None
     assert read_checks(tmp_path, "TEST") is not None
     assert read_long(tmp_path, "TEST") is not None
     assert read_quarterly(tmp_path, "OTHER") is None
+
+
+def test_first_fiscal_year_drops_earlier_periods_and_keeps_the_rest() -> None:
+    later = payload()["facts"]["t"]  # type: ignore[index]
+    shifted = {"facts": {"t": {}}}
+    for name, body in later.items():
+        entries = list(body["units"]["USD"])
+        for entry in list(entries):  # add a prior fiscal year with a different shape of numbers
+            entries.append(
+                {
+                    **entry,
+                    "start": entry["start"].replace("2024", "2023").replace("2025", "2024"),
+                    "end": entry["end"].replace("2024", "2023").replace("2025", "2024"),
+                }
+            )
+        shifted["facts"]["t"][name] = {"units": {"USD": entries}}
+    both = build_company_dataset(COMPANY, MAPPINGS, shifted, SNAPSHOT).quarterly
+    assert sorted(both["fiscal_year"].unique()) == [2024, 2025]
+
+    windowed = {
+        field: mapping.model_copy(update={"first_fiscal_year": 2025})
+        for field, mapping in MAPPINGS.items()
+    }
+    only_2025 = build_company_dataset(COMPANY, windowed, shifted, SNAPSHOT).quarterly
+    assert sorted(only_2025["fiscal_year"].unique()) == [2025]
+    assert only_2025["base_fcf"].tolist() == [30, 35, 40, 45]

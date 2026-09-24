@@ -162,3 +162,13 @@ def test_invalid_xbrl_mappings_are_rejected(tmp_path: Path, field_body: str) -> 
 def test_xbrl_mappings_file_needs_a_top_level_mapping(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="under 'mappings'"):
         load_xbrl_mappings(_mapping_file(tmp_path, "other: {}\n"))
+
+
+def test_committed_microsoft_mapping_covers_every_canonical_field() -> None:
+    mapping = load_xbrl_mappings()["MSFT"]
+    assert set(mapping) == set(CanonicalField)
+    assert all(field.first_fiscal_year == 2018 for field in mapping.values())
+    revenue_tags = [c.tag for c in mapping[CanonicalField.REVENUE].candidates]
+    assert revenue_tags[0] == "RevenueFromContractWithCustomerExcludingAssessedTax"
+    assert "SalesRevenueGoodsNet" not in revenue_tags  # a component, not total revenue
+    assert mapping[CanonicalField.CASH_CAPEX].expect_non_negative is True

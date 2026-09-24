@@ -17,7 +17,7 @@ from ai_capital_cycle_monitor.pipelines.xbrl import SelectedFact, extract_facts,
 from ai_capital_cycle_monitor.schemas.config import Company
 from ai_capital_cycle_monitor.schemas.provenance import DataBasis, SourceRecord, SourceType
 from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField, FieldMapping
-from ai_capital_cycle_monitor.utils.fiscal import fiscal_label
+from ai_capital_cycle_monitor.utils.fiscal import fiscal_label, fiscal_period_for_end
 
 PERIOD_KEY = ["fiscal_year", "fiscal_quarter"]
 CHECK_COLUMNS = [
@@ -45,6 +45,20 @@ class CompanyDataset:
     registry_records: list[SourceRecord]
     source_url: str
     retrieved_at_utc: datetime
+
+
+def _from_fiscal_year(
+    selected: list[SelectedFact], fye_month: int, first_fiscal_year: int | None
+) -> list[SelectedFact]:
+    """Drop facts from fiscal years before `first_fiscal_year`. Facts on no fiscal period stay."""
+    if first_fiscal_year is None:
+        return selected
+    kept = []
+    for item in selected:
+        period = fiscal_period_for_end(item.fact.end, fye_month)
+        if period is None or period[0] >= first_fiscal_year:
+            kept.append(item)
+    return kept
 
 
 def series_id(ticker: str, field: str) -> str:
@@ -256,7 +270,11 @@ def build_company_dataset(
         facts = extract_facts(company_facts, mapping.candidates, unit=mapping.unit)
         field_quarters, field_checks = derive_quarters(
             field.value,
-            select_facts(facts, mapping.candidates),
+            _from_fiscal_year(
+                select_facts(facts, mapping.candidates),
+                company.fiscal_year_end_month,
+                mapping.first_fiscal_year,
+            ),
             company.fiscal_year_end_month,
             expect_non_negative=mapping.expect_non_negative,
         )
