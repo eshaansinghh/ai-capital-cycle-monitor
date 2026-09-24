@@ -121,3 +121,40 @@ def test_empty_or_incomplete_tables_are_rejected() -> None:
         _figure(_quarterly().iloc[0:0])
     with pytest.raises(ValueError, match="missing columns"):
         _figure(_quarterly().drop(columns=["base_fcf"]))
+
+
+def _many_quarters(count: int = 20) -> pd.DataFrame:
+    frame = _quarterly()
+    rows = []
+    for index in range(count):
+        row = frame.iloc[index % len(frame)].copy()
+        row["period_end"] = pd.Timestamp("2015-03-31") + pd.DateOffset(months=3 * index)
+        row["fiscal_label"] = f"FY{15 + index // 4:02d} Q{index % 4 + 1}"
+        rows.append(row)
+    return pd.DataFrame(rows).reset_index(drop=True)
+
+
+def test_many_quarters_use_short_rotated_ticks_but_keep_the_month_in_the_hover() -> None:
+    figure = _figure(_many_quarters(20))
+    assert figure.layout.xaxis.tickangle == -90
+    assert list(figure.layout.xaxis.ticktext)[:2] == ["FY15 Q1", "FY15 Q2"]
+    assert "<br>" in next(iter(figure.layout.xaxis.tickvals))  # full label stays the category
+    assert figure.layout.margin.b == 150
+
+
+def test_few_quarters_keep_two_line_horizontal_ticks() -> None:
+    figure = _figure()
+    assert figure.layout.xaxis.tickangle == 0
+    assert "<br>" in next(iter(figure.layout.xaxis.ticktext))
+
+
+def test_source_note_sits_at_the_figure_bottom_so_ticks_cannot_cover_it() -> None:
+    for quarterly in (_quarterly(), _many_quarters(30)):
+        figure = _figure(quarterly)
+        note = figure.layout.annotations[0]
+        margin = figure.layout.margin
+        plot_height = figure.layout.height - margin.t - margin.b
+        assert note.yanchor == "bottom"
+        # Its bottom edge sits a few pixels above the bottom of the figure, below the tick labels.
+        assert note.y == pytest.approx(-(margin.b - 6) / plot_height)
+        assert note.y < 0

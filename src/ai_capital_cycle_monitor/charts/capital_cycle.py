@@ -20,6 +20,10 @@ REQUIRED_COLUMNS = [
 ]
 BILLION = 1e9
 NOTE_WIDTH = 120
+CROWDED_QUARTERS = 16  # above this, axis labels drop the month and rotate
+HEIGHT = 520
+MARGIN_TOP = 140
+NOTE_PADDING = 6
 
 
 def source_note(source: str, retrieved: date) -> str:
@@ -86,6 +90,8 @@ def quarterly_cash_cycle_figure(
         f"{label}<br>{end:%b %Y}"
         for label, end in zip(frame["fiscal_label"], frame["period_end"], strict=True)
     ]
+    crowded = len(frame) > CROWDED_QUARTERS
+    tick_text = list(frame["fiscal_label"]) if crowded else labels
     figure = go.Figure()
 
     def bars(name: str, column: str, colour: str) -> tuple[list[float | None], bool]:
@@ -132,6 +138,11 @@ def quarterly_cash_cycle_figure(
         subtitle += " Hatched bars are derived from year-to-date differences."
     wrapped_note = textwrap.fill(note, NOTE_WIDTH).replace("\n", "<br>")
     end_label = _end_label(fcf, theme.ink, theme.surface)
+    margin_bottom = 150 if crowded else 120
+    plot_height = HEIGHT - MARGIN_TOP - margin_bottom
+    note_y = (
+        -(margin_bottom - NOTE_PADDING) / plot_height
+    )  # bottom edge of the figure, in paper units
 
     figure.update_layout(
         title={
@@ -149,8 +160,8 @@ def quarterly_cash_cycle_figure(
         plot_bgcolor=theme.surface,
         font={"family": FONT_FAMILY, "color": theme.ink_secondary, "size": 12},
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.03, "x": 0, "title": {"text": ""}},
-        margin={"l": 60, "r": 110, "t": 140, "b": 100},
-        height=520,
+        margin={"l": 60, "r": 110, "t": MARGIN_TOP, "b": margin_bottom},
+        height=HEIGHT,
         annotations=[
             {
                 "text": wrapped_note,
@@ -158,9 +169,9 @@ def quarterly_cash_cycle_figure(
                 "yref": "paper",
                 "x": 0,
                 "xshift": -52,
-                "y": -0.2,
+                "y": note_y,
                 "xanchor": "left",
-                "yanchor": "top",
+                "yanchor": "bottom",
                 "showarrow": False,
                 "align": "left",
                 "font": {"size": 11, "color": theme.muted},
@@ -169,7 +180,13 @@ def quarterly_cash_cycle_figure(
         ],
     )
     figure.update_xaxes(
-        showgrid=False, linecolor=theme.baseline, tickfont={"color": theme.ink_secondary}
+        showgrid=False,
+        linecolor=theme.baseline,
+        tickfont={"color": theme.ink_secondary},
+        tickmode="array",
+        tickvals=labels,
+        ticktext=tick_text,
+        tickangle=-90 if crowded else 0,
     )
     figure.update_yaxes(
         title={"text": "USD billions", "font": {"color": theme.muted}},
