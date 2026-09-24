@@ -1,6 +1,7 @@
 """Load and validate the source registry (data/source_registry.csv)."""
 
 import csv
+from collections.abc import Iterable
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -27,3 +28,19 @@ def load_source_registry(path: Path = SOURCE_REGISTRY_PATH) -> list[SourceRecord
             except ValidationError as error:
                 raise ValueError(f"{path.name} row {row_number} is invalid:\n{error}") from error
     return records
+
+
+def upsert_source_records(
+    records: Iterable[SourceRecord], path: Path = SOURCE_REGISTRY_PATH
+) -> None:
+    """Add or replace rows by series_id and rewrite the registry sorted by series_id."""
+    merged = {record.series_id: record for record in load_source_registry(path)}
+    merged.update({record.series_id: record for record in records})
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle, fieldnames=list(SourceRecord.model_fields), lineterminator="\n"
+        )
+        writer.writeheader()
+        for series_id in sorted(merged):
+            row = merged[series_id].model_dump(mode="json")
+            writer.writerow({key: "" if value is None else value for key, value in row.items()})

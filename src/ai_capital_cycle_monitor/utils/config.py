@@ -9,6 +9,7 @@ import yaml
 from pydantic import BaseModel
 
 from ai_capital_cycle_monitor.schemas.config import Company, EventDefinition, MetricDefinition
+from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField, FieldMapping
 from ai_capital_cycle_monitor.utils.paths import CONFIG_DIR
 
 
@@ -45,3 +46,21 @@ def load_metrics(path: Path = CONFIG_DIR / "metrics.yml") -> list[MetricDefiniti
 
 def load_events(path: Path = CONFIG_DIR / "events.yml") -> list[EventDefinition]:
     return _load(path, "events", EventDefinition, lambda event: event.event_id, "event ids")
+
+
+def load_xbrl_mappings(
+    path: Path = CONFIG_DIR / "xbrl_mappings.yml",
+) -> dict[str, dict[CanonicalField, FieldMapping]]:
+    """Per-ticker XBRL tag mappings, keyed by ticker and then canonical field."""
+    with path.open(encoding="utf-8") as handle:
+        document = yaml.safe_load(handle)
+    tickers = (document or {}).get("mappings")
+    if not isinstance(tickers, dict):
+        raise ValueError(f"{path.name} must contain a top-level mapping under 'mappings'")
+    return {
+        ticker: {
+            CanonicalField(field): FieldMapping.model_validate(mapping)
+            for field, mapping in fields.items()
+        }
+        for ticker, fields in tickers.items()
+    }

@@ -10,7 +10,13 @@ import pytest
 from pydantic import ValidationError
 
 from ai_capital_cycle_monitor.schemas.config import Company, EventDefinition
-from ai_capital_cycle_monitor.utils.config import load_companies, load_events, load_metrics
+from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField
+from ai_capital_cycle_monitor.utils.config import (
+    load_companies,
+    load_events,
+    load_metrics,
+    load_xbrl_mappings,
+)
 
 INITIAL_UNIVERSE = {"MSFT", "GOOGL", "AMZN", "META", "ORCL", "NVDA", "CRWV"}
 EXPECTED_METRICS = {
@@ -112,3 +118,47 @@ def test_event_requires_timezone_and_exposed_tickers() -> None:
         EventDefinition.model_validate(naive)
     with pytest.raises(ValidationError, match="exposed_tickers"):
         EventDefinition.model_validate(event | {"exposed_tickers": []})
+
+
+def _mapping_file(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "xbrl_mappings.yml"
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def test_xbrl_mappings_load_by_ticker_and_canonical_field(tmp_path: Path) -> None:
+    path = _mapping_file(
+        tmp_path,
+        "mappings:\n"
+        "  TEST:\n"
+        "    revenue:\n"
+        "      statement: income_statement\n"
+        "      expect_non_negative: true\n"
+        "      candidates:\n"
+        "        - {taxonomy: test, tag: FirstChoice}\n"
+        "        - {taxonomy: test, tag: SecondChoice}\n",
+    )
+    mapping = load_xbrl_mappings(path)["TEST"][CanonicalField.REVENUE]
+    assert [candidate.tag for candidate in mapping.candidates] == ["FirstChoice", "SecondChoice"]
+    assert mapping.unit == "USD"
+    assert mapping.expect_non_negative is True
+
+
+@pytest.mark.parametrize(
+    "field_body",
+    [
+        "    not_a_field:\n      statement: s\n      candidates: [{taxonomy: t, tag: T}]\n",
+        "    revenue:\n      statement: s\n      candidates: []\n",
+        "    revenue:\n      statement: s\n      typo: 1\n"
+        "      candidates: [{taxonomy: t, tag: T}]\n",
+    ],
+)
+def test_invalid_xbrl_mappings_are_rejected(tmp_path: Path, field_body: str) -> None:
+    path = _mapping_file(tmp_path, "mappings:\n  TEST:\n" + field_body)
+    with pytest.raises(ValueError):
+        load_xbrl_mappings(path)
+
+
+def test_xbrl_mappings_file_needs_a_top_level_mapping(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="under 'mappings'"):
+        load_xbrl_mappings(_mapping_file(tmp_path, "other: {}\n"))
