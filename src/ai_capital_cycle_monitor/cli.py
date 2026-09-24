@@ -16,7 +16,7 @@ from ai_capital_cycle_monitor.pipelines.build import (
     find_mappings,
     verify_identity,
 )
-from ai_capital_cycle_monitor.pipelines.filing_text import find_rows, to_lines
+from ai_capital_cycle_monitor.pipelines.filing_text import find_rows, find_text, to_lines
 from ai_capital_cycle_monitor.pipelines.financials import DatasetError
 from ai_capital_cycle_monitor.utils.paths import DATA_DIR
 from ai_capital_cycle_monitor.utils.settings import SettingsError, load_settings
@@ -43,13 +43,16 @@ def build_parser() -> argparse.ArgumentParser:
     filings.add_argument("ticker")
     filings.add_argument("--form", default="10-K,10-Q", help="comma-separated forms")
     filings.add_argument("--limit", type=int, default=12)
+    filings.add_argument("--older", action="store_true", help="also read older submissions pages")
     filings.add_argument("--refresh", action="store_true", help="ignore stored snapshots")
 
     read = commands.add_parser("read-filing", help="print labelled statement rows from a filing")
     read.add_argument("ticker")
     read.add_argument("accession")
     read.add_argument("document", help="primary document file name, from list-filings")
-    read.add_argument("--label", action="append", required=True, help="regex on the row label")
+    read.add_argument("--label", action="append", default=[], help="regex on the row label")
+    read.add_argument("--text", action="append", default=[], help="regex on any prose line")
+    read.add_argument("--lines", help="print raw text rows START:END (1-based, inclusive)")
     read.add_argument("--limit", type=int, default=6, help="rows to show per label")
 
     build = commands.add_parser("build", help="build the company's quarterly dataset")
@@ -100,17 +103,22 @@ def _list_filings(args: argparse.Namespace) -> int:
     company = find_company(args.ticker)
     if company.cik is None:
         raise BuildError(f"{company.ticker} has no CIK configured")
-    submissions = _client().submissions(company.cik, refresh=args.refresh).read_json()
-    recent = submissions["filings"]["recent"]
+    client = _client()
+    submissions = client.submissions(company.cik, refresh=args.refresh).read_json()
+    blocks = [submissions["filings"]["recent"]]
+    if args.older:
+        for entry in submissions["filings"].get("files", []):
+            blocks.append(client.submissions_page(entry["name"], refresh=args.refresh).read_json())
     wanted = {form.strip() for form in args.form.split(",")}
     rows = [
         (form, filed, report, accession, document)
+        for block in blocks
         for form, filed, report, accession, document in zip(
-            recent["form"],
-            recent["filingDate"],
-            recent["reportDate"],
-            recent["accessionNumber"],
-            recent["primaryDocument"],
+            block["form"],
+            block["filingDate"],
+            block["reportDate"],
+            block["accessionNumber"],
+            block["primaryDocument"],
             strict=True,
         )
         if form in wanted
@@ -122,6 +130,8 @@ def _list_filings(args: argparse.Namespace) -> int:
 
 
 def _read_filing(args: argparse.Namespace) -> int:
+    if not (args.label or args.text or args.lines):
+        raise BuildError("give at least one --label, --text or --lines")
     company = find_company(args.ticker)
     if company.cik is None:
         raise BuildError(f"{company.ticker} has no CIK configured")
@@ -133,6 +143,16 @@ def _read_filing(args: argparse.Namespace) -> int:
         for row in find_rows(lines, label, limit=args.limit):
             shown = ", ".join(f"{n:,.0f}" if n == int(n) else f"{n:,.2f}" for n in row.numbers[:8])
             print(f"  row {row.line:>6} [{row.heading[:30]:<30}] {row.label[:60]:<60} | {shown}")
+    for pattern in args.text:
+        print(f"\n## text matching /{pattern}/")
+        for number, excerpt in find_text(lines, pattern, limit=args.limit):
+            print(f"  line {number:>6}: ...{excerpt}...")
+    if args.lines:
+        start, _, end = args.lines.partition(":")
+        print(f"\n## rows {args.lines}")
+        for number in range(int(start), int(end) + 1):
+            if 1 <= number <= len(lines):
+                print(f"  {number:>6}: {lines[number - 1][:230]}")
     return 0
 
 
@@ -161,6 +181,9 @@ COMMANDS = {
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # Filings contain characters a Windows console cannot encode; show a placeholder, don't crash.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     try:
         return COMMANDS[args.command](args)
     except EXPECTED_ERRORS as error:

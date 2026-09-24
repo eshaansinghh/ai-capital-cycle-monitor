@@ -92,3 +92,20 @@ def _nearest_heading(lines: list[str], index: int, lookback: int = 260) -> str:
         if len(candidate) < 70 and _HEADING.search(candidate.replace(" ", "")):
             return candidate
     return ""
+
+
+def find_text(
+    lines: list[str], pattern: re.Pattern[str] | str, *, limit: int = 8, width: int = 260
+) -> list[tuple[int, str]]:
+    """Prose lines matching `pattern` anywhere (not only table labels), trimmed around the match."""
+    matcher = re.compile(pattern, re.IGNORECASE) if isinstance(pattern, str) else pattern
+    found: list[tuple[int, str]] = []
+    for index, line in enumerate(lines):
+        match = matcher.search(line)
+        if not match:
+            continue
+        start = max(match.start() - width // 2, 0)
+        found.append((index + 1, line[start : start + width]))
+        if len(found) == limit:
+            break
+    return found

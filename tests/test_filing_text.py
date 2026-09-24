@@ -2,7 +2,12 @@
 
 import pytest
 
-from ai_capital_cycle_monitor.pipelines.filing_text import find_rows, parse_number, to_lines
+from ai_capital_cycle_monitor.pipelines.filing_text import (
+    find_rows,
+    find_text,
+    parse_number,
+    to_lines,
+)
 
 PRETTY_PRINTED = """
 <p>CASH FLOWS STATEMENTS</p>
@@ -70,3 +75,13 @@ def test_labels_without_numbers_and_prose_are_not_rows() -> None:
 def test_limit_caps_the_rows_returned() -> None:
     table = "<table>" + "<tr><td>Item</td><td>1,000</td></tr>" * 5 + "</table>"
     assert len(find_rows(to_lines(table), "^Item", limit=2)) == 2
+
+
+def test_find_text_matches_prose_anywhere_and_trims_around_the_match() -> None:
+    document = (
+        "<p>We adopted Topic 606 on January 1, 2017 using the modified retrospective method.</p>"
+    )
+    ((line, excerpt),) = find_text(to_lines(document), "modified retrospective", width=40)
+    assert line == 1
+    assert "modified retrospective" in excerpt and len(excerpt) <= 40
+    assert find_text(to_lines(document), "not present anywhere") == []

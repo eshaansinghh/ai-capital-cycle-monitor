@@ -21,6 +21,7 @@ _DATA_HOST = "https://data.sec.gov"
 _ARCHIVES = "https://www.sec.gov/Archives/edgar/data"
 _ACCESSION = re.compile(r"^\d{10}-\d{2}-\d{6}$")
 _DOCUMENT_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
+_SUBMISSIONS_PAGE = re.compile(r"^CIK\d{10}-submissions-\d{3}\.json$")
 
 
 class SecRequestError(RuntimeError):
@@ -116,6 +117,21 @@ class SecClient:
         cik10 = normalise_cik(cik)
         return self._fetch(
             "submissions", f"CIK{cik10}", submissions_url(cik10), max_age=max_age, refresh=refresh
+        )
+
+    def submissions_page(
+        self, name: str, *, max_age: timedelta | None = DEFAULT_MAX_AGE, refresh: bool = False
+    ) -> Snapshot:
+        """An older-filings page listed under submissions filings.files, for example
+        CIK0001652044-submissions-001.json."""
+        if not _SUBMISSIONS_PAGE.match(name):
+            raise ValueError(f"not a submissions page name: {name!r}")
+        return self._fetch(
+            "submissions",
+            name,
+            f"{_DATA_HOST}/submissions/{name}",
+            max_age=max_age,
+            refresh=refresh,
         )
 
     def company_facts(

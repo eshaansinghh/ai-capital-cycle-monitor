@@ -60,7 +60,10 @@ def test_reading_and_listing_filings_have_their_own_arguments() -> None:
     )
     listing = parser.parse_args(["list-filings", "MSFT", "--form", "10-K", "--limit", "3"])
     assert (listing.form, listing.limit) == ("10-K", 3)
-    with pytest.raises(SystemExit):
-        parser.parse_args(
-            ["read-filing", "MSFT", "0001193125-26-323660", "msft.htm"]
-        )  # needs a label
+
+
+def test_reading_a_filing_needs_a_selector_and_says_so_before_touching_the_network(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert cli.main(["read-filing", "MSFT", "0001193125-26-323660", "msft.htm"]) == 2
+    assert "at least one --label, --text or --lines" in capsys.readouterr().err

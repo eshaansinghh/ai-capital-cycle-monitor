@@ -157,3 +157,14 @@ def test_network_failures_are_wrapped_without_headers(tmp_path: Path) -> None:
         client.company_facts(1)
     assert AGENT not in str(error.value)
     assert RawStore(tmp_path).latest("companyfacts", "CIK0000000001") is None
+
+
+def test_older_submissions_pages_are_fetched_by_validated_name(tmp_path: Path) -> None:
+    session = FakeSession([FakeResponse(200, b'{"form": []}')])
+    name = "CIK0000000001-submissions-001.json"
+    snapshot = _client(tmp_path, session).submissions_page(name)
+    assert snapshot.url == f"https://data.sec.gov/submissions/{name}"
+    assert snapshot.read_json() == {"form": []}
+    for bad in ("../CIK0000000001-submissions-001.json", "submissions-001.json", "CIK1.json"):
+        with pytest.raises(ValueError, match="submissions page name"):
+            _client(tmp_path, FakeSession([])).submissions_page(bad)
