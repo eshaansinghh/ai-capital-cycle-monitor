@@ -133,4 +133,8 @@ Resolved in the phase named, with the decision recorded under [Amendments](#amen
 
 ## Amendments
 
-None yet.
+| Date | Change | Reason |
+|---|---|---|
+| 2026-09-24 | Microsoft's quarterly history starts at fiscal 2018 (period ending 30 Sep 2017), not earlier. | The audit of Microsoft's real filings showed total revenue on two incompatible bases in fiscal 2016-2017: the ASC 606 recast values differ from the originally filed values, and the old tag was later revised. From fiscal 2018 one tag supplies every fact with no conflicts. Evidence in [`xbrl_mapping_msft.md`](xbrl_mapping_msft.md). |
+| 2026-09-24 | Fourth quarters are derived as fiscal year minus nine months for the fields where no three-month fact exists. Q1-Q3 use reported three-month values. | The first real build showed Microsoft's 10-Qs print three-month cash-flow figures, so the earlier assumption that most quarters needed year-to-date differencing was wrong. Reconciled in [`reconciliation_msft.md`](reconciliation_msft.md). |
+| 2026-09-24 | Section 9's open question on the headline FCF variant is unchanged, but base FCF alone must not support conclusions about the capital cycle. | Cash capex excludes finance-lease-funded infrastructure (see the caveat in [`xbrl_mapping_msft.md`](xbrl_mapping_msft.md)). Lease-adjusted FCF is a Phase 3 deliverable. |
