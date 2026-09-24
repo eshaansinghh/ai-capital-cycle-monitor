@@ -1,0 +1,16 @@
+{
+  "source_url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+  "retrieved_at_utc": "2026-09-24T20:51:10.006208+00:00",
+  "source_sha256": "f8aae2965b20ad0df44bdf7ccbedf797d275b6b8dc030154a7a311361bb7246f",
+  "source_size_bytes": 4881196,
+  "filter": "forms ['10-K', '10-K/A', '10-Q', '10-Q/A']; duration facts with period end >= 2017-07-01",
+  "entries_per_tag": {
+    "RevenueFromContractWithCustomerExcludingAssessedTax": 124,
+    "SalesRevenueNet": 5,
+    "Revenues": 0,
+    "NetCashProvidedByUsedInOperatingActivities": 108,
+    "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations": 1,
+    "PaymentsToAcquirePropertyPlantAndEquipment": 109
+  },
+  "note": "Entries are copied verbatim. Only 'description' and unmapped tags are omitted."
+}
