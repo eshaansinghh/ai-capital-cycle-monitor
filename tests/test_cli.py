@@ -36,3 +36,31 @@ def test_unexpected_errors_are_not_swallowed(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setitem(cli.COMMANDS, "build", crash)
     with pytest.raises(ZeroDivisionError):
         cli.main(["build", "MSFT"])
+
+
+def test_reading_and_listing_filings_have_their_own_arguments() -> None:
+    parser = cli.build_parser()
+    read = parser.parse_args(
+        [
+            "read-filing",
+            "MSFT",
+            "0001193125-26-323660",
+            "msft.htm",
+            "--label",
+            "^Total",
+            "--label",
+            "x",
+        ]
+    )
+    assert (read.ticker, read.document, read.label, read.limit) == (
+        "MSFT",
+        "msft.htm",
+        ["^Total", "x"],
+        6,
+    )
+    listing = parser.parse_args(["list-filings", "MSFT", "--form", "10-K", "--limit", "3"])
+    assert (listing.form, listing.limit) == ("10-K", 3)
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["read-filing", "MSFT", "0001193125-26-323660", "msft.htm"]
+        )  # needs a label
