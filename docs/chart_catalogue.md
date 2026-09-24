@@ -1,6 +1,6 @@
 # Chart catalogue
 
-**Status: figure 2 is implemented in code and awaiting real data; all others are planned.** An
+**Status: figure 2 is built for Microsoft on real SEC data (Phase 2); all others are planned.** An
 entry moves to "built" only when its data are traceable to `data/source_registry.csv`. The page
 refuses to draw a series that is not registered.
 
@@ -40,3 +40,7 @@ A first candidate set of muted navy, blue and teal failed on chroma, lightness b
 normal-vision separation, so a more saturated blue/teal pair replaced it. Amber and red are
 reserved for warnings and are never used for a series. Bars whose value is derived from
 year-to-date differences are hatched, and missing quarters are gaps, never zeros.
+
+Checked on the real Microsoft data in a real browser, light and dark. With all 36 quarters the axis
+labels shorten and rotate and the source note stays visible, after a collision between them was
+found and fixed.
