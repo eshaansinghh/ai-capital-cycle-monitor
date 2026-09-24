@@ -165,9 +165,10 @@ def derive_quarters(
     while period <= periods[-1]:
         quarters.append(_build_quarter(field, period, cumulative, standalone, fye_month))
         period = _next(period)
+    unit = rounding_unit(selected)
     checks = [
-        *_standalone_vs_cumulative(field, cumulative, standalone),
-        *_quarters_sum_to_year(field, quarters, cumulative),
+        *_standalone_vs_cumulative(field, cumulative, standalone, unit),
+        *_quarters_sum_to_year(field, quarters, cumulative, unit),
         *_signs(field, quarters, expect_non_negative),
         *_revisions_and_conflicts(field, quarters),
         *_missing_quarters(field, quarters),
@@ -175,10 +176,45 @@ def derive_quarters(
     return quarters, checks
 
 
+def rounding_unit(selected: list[SelectedFact]) -> int:
+    """The reporting scale implied by the values.
+
+    1,000,000 if every value is a whole number of millions, else 1,000 if thousands, else 1.
+    Reported figures are rounded to this unit.
+    """
+    values = [item.fact.value for item in selected]
+    if not values or any(float(value) != int(value) for value in values):
+        return 1
+    for unit in (1_000_000, 1_000):
+        if all(int(value) % unit == 0 for value in values):
+            return unit
+    return 1
+
+
+def _rounding_note(differences: list[tuple[str, float]], unit: int) -> str:
+    if not differences:
+        return ""
+    shown = ", ".join(f"{label} {amount / unit:,.0f}" for label, amount in differences[:6])
+    return f"; {len(differences)} differ by rounding only (in reporting units: {shown})"
+
+
+def _with_detail(check: CheckResult, suffix: str) -> CheckResult:
+    return CheckResult(**{**vars(check), "detail": check.detail + suffix})
+
+
 def _standalone_vs_cumulative(
-    field: str, cumulative: dict[Period, SelectedFact], standalone: dict[Period, SelectedFact]
+    field: str,
+    cumulative: dict[Period, SelectedFact],
+    standalone: dict[Period, SelectedFact],
+    unit: int,
 ) -> list[CheckResult]:
-    checked, violations = 0, []
+    """A reported three-month value should equal the year-to-date difference, to within rounding.
+
+    Each of the three reported figures is rounded to `unit`, so they can disagree by up to 1.5
+    units without any error in the filing.
+    """
+    tolerance = 1.5 * unit
+    checked, violations, rounding = 0, [], []
     for (fiscal_year, quarter), item in sorted(standalone.items()):
         upper, lower = (
             cumulative.get((fiscal_year, quarter)),
@@ -188,7 +224,8 @@ def _standalone_vs_cumulative(
             continue
         checked += 1
         expected = upper.fact.value - lower.fact.value
-        if item.fact.value != expected:
+        difference = abs(item.fact.value - expected)
+        if difference > tolerance:
             violations.append(
                 CheckResult(
                     "standalone_vs_cumulative",
@@ -196,19 +233,34 @@ def _standalone_vs_cumulative(
                     fiscal_year,
                     quarter,
                     CheckStatus.WARN,
-                    "standalone quarter fact differs from the year-to-date difference",
+                    "standalone quarter fact differs from the year-to-date difference by more "
+                    "than rounding",
                     expected,
                     item.fact.value,
                 )
             )
-    return summarise("standalone_vs_cumulative", field, checked, violations, "quarters")
+        elif difference:
+            rounding.append((f"FY{fiscal_year % 100:02d} Q{quarter}", difference))
+    result = summarise("standalone_vs_cumulative", field, checked, violations, "quarters")
+    if not violations and checked:
+        result[0] = _with_detail(result[0], _rounding_note(rounding, unit))
+    return result
 
 
 def _quarters_sum_to_year(
-    field: str, quarters: list[QuarterValue], cumulative: dict[Period, SelectedFact]
+    field: str,
+    quarters: list[QuarterValue],
+    cumulative: dict[Period, SelectedFact],
+    unit: int,
 ) -> list[CheckResult]:
+    """The four quarters should sum to the reported year, to within rounding.
+
+    Five rounded figures are involved (four quarters and the year), so they can disagree by up to
+    2.5 units without any error in the filing.
+    """
+    tolerance = 2.5 * unit
     by_period = {(q.fiscal_year, q.fiscal_quarter): q for q in quarters}
-    checked, violations = 0, []
+    checked, violations, rounding = 0, [], []
     for fiscal_year in sorted({q.fiscal_year for q in quarters}):
         year_fact = cumulative.get((fiscal_year, 4))
         parts = [by_period.get((fiscal_year, quarter)) for quarter in (1, 2, 3, 4)]
@@ -216,7 +268,8 @@ def _quarters_sum_to_year(
             continue
         checked += 1
         total = sum(part.value for part in parts if part is not None and part.value is not None)
-        if total != year_fact.fact.value:
+        difference = abs(total - year_fact.fact.value)
+        if difference > tolerance:
             violations.append(
                 CheckResult(
                     "quarters_sum_to_year",
@@ -224,12 +277,18 @@ def _quarters_sum_to_year(
                     fiscal_year,
                     None,
                     CheckStatus.FAIL,
-                    "the four quarters do not sum to the reported fiscal-year value",
+                    "the four quarters do not sum to the reported fiscal-year value by more "
+                    "than rounding",
                     year_fact.fact.value,
                     total,
                 )
             )
-    return summarise("quarters_sum_to_year", field, checked, violations, "fiscal years")
+        elif difference:
+            rounding.append((f"FY{fiscal_year % 100:02d}", difference))
+    result = summarise("quarters_sum_to_year", field, checked, violations, "fiscal years")
+    if not violations and checked:
+        result[0] = _with_detail(result[0], _rounding_note(rounding, unit))
+    return result
 
 
 def _signs(

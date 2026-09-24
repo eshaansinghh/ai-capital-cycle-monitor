@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from ai_capital_cycle_monitor.pipelines.checks import CheckStatus
-from ai_capital_cycle_monitor.pipelines.quarters import derive_quarters
+from ai_capital_cycle_monitor.pipelines.quarters import derive_quarters, rounding_unit
 from ai_capital_cycle_monitor.pipelines.xbrl import SelectedFact
 from ai_capital_cycle_monitor.schemas.provenance import DataBasis
 from factories import FY_START, FYE_MONTH, cumulative, fact, selected
@@ -101,13 +101,13 @@ def test_standalone_quarter_fact_is_used_and_agreement_is_checked() -> None:
 
 
 def test_disagreeing_standalone_fact_warns_and_sum_check_fails() -> None:
-    items = [*cumulative(), selected("2024-10-01", "2024-12-31", 16)]
+    items = [*cumulative(), selected("2024-10-01", "2024-12-31", 20)]
     quarters, checks = _derive(items)
-    assert quarters[1].value == 16
+    assert quarters[1].value == 20
     (warning,) = [c for c in checks if c.check == "standalone_vs_cumulative"]
-    assert (warning.status, warning.expected, warning.actual) == (CheckStatus.WARN, 15, 16)
+    assert (warning.status, warning.expected, warning.actual) == (CheckStatus.WARN, 15, 20)
     (failure,) = [c for c in checks if c.check == "quarters_sum_to_year"]
-    assert (failure.status, failure.expected, failure.actual) == (CheckStatus.FAIL, 70, 71)
+    assert (failure.status, failure.expected, failure.actual) == (CheckStatus.FAIL, 70, 75)
 
 
 def test_consistent_quarters_pass_the_sum_check() -> None:
@@ -154,3 +154,45 @@ def test_ambiguous_duplicate_periods_are_rejected() -> None:
 
 def test_no_facts_yield_no_quarters() -> None:
     assert _derive([]) == ([], [])
+
+
+MILLION = 1_000_000
+
+
+def _in_millions(values: tuple[int | None, ...]) -> list[SelectedFact]:
+    return cumulative(tuple(None if v is None else v * MILLION for v in values))
+
+
+def test_rounding_unit_is_inferred_from_the_values() -> None:
+    assert rounding_unit(_in_millions((10, 25, 45, 70))) == 1_000_000
+    assert rounding_unit(cumulative((10_000, 25_000, 45_000, 70_000))) == 1_000
+    assert rounding_unit(cumulative((10, 25, 45, 71))) == 1
+    assert rounding_unit([]) == 1
+
+
+def test_a_one_million_disagreement_in_millions_is_rounding_not_an_error() -> None:
+    """Reported in millions, five rounded figures can differ by a million with no filing error."""
+    items = [*_in_millions((10, 25, 45, 70)), selected("2024-10-01", "2024-12-31", 16 * MILLION)]
+    quarters, checks = _derive(items)
+    assert quarters[1].value == 16 * MILLION  # the reported standalone value is used as reported
+    standalone = [c for c in checks if c.check == "standalone_vs_cumulative"]
+    total = [c for c in checks if c.check == "quarters_sum_to_year"]
+    assert [c.status for c in standalone] == [CheckStatus.PASS]
+    assert [c.status for c in total] == [CheckStatus.PASS]
+    assert "differ by rounding only" in standalone[0].detail
+    assert "FY25 Q2 1" in standalone[0].detail
+    assert "FY25 1" in total[0].detail
+
+
+def test_a_disagreement_beyond_rounding_still_warns_and_fails_when_in_millions() -> None:
+    items = [*_in_millions((10, 25, 45, 70)), selected("2024-10-01", "2024-12-31", 20 * MILLION)]
+    _, checks = _derive(items)
+    assert _statuses(checks, "standalone_vs_cumulative") == [CheckStatus.WARN]
+    assert _statuses(checks, "quarters_sum_to_year") == [CheckStatus.FAIL]
+
+
+def test_exactly_matching_values_carry_no_rounding_note() -> None:
+    _, checks = _derive(_in_millions((10, 25, 45, 70)))
+    total = next(c for c in checks if c.check == "quarters_sum_to_year")
+    assert total.status is CheckStatus.PASS
+    assert "rounding" not in total.detail
