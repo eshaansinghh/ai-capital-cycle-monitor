@@ -31,4 +31,23 @@ authors, dates and titles are verified by hand.
 
 ## Reference list
 
-*No sources have been cited yet.*
+Microsoft Corporation (2025) *Form 10-Q for the quarterly period ended September 30, 2025*.
+Available at: https://www.sec.gov/Archives/edgar/data/789019/000119312525256321/msft-20250930.htm
+(Accessed: 24 September 2026).
+
+Microsoft Corporation (2026a) *Form 10-Q for the quarterly period ended March 31, 2026*. Available
+at: https://www.sec.gov/Archives/edgar/data/789019/000119312526191507/msft-20260331.htm (Accessed:
+24 September 2026).
+
+Microsoft Corporation (2026b) *Form 10-K for the fiscal year ended June 30, 2026*. Available at:
+https://www.sec.gov/Archives/edgar/data/789019/000119312526323660/msft-20260630.htm (Accessed:
+24 September 2026).
+
+U.S. Securities and Exchange Commission (2026a) *Company tickers* [Dataset]. Available at:
+https://www.sec.gov/files/company_tickers.json (Accessed: 24 September 2026).
+
+U.S. Securities and Exchange Commission (2026b) *EDGAR submissions API* [Dataset]. Available at:
+https://data.sec.gov/submissions/ (Accessed: 24 September 2026).
+
+U.S. Securities and Exchange Commission (2026c) *XBRL Company Facts API* [Dataset]. Available at:
+https://data.sec.gov/api/xbrl/companyfacts/ (Accessed: 24 September 2026).
