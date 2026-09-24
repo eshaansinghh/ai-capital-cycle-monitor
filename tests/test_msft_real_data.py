@@ -187,8 +187,17 @@ def test_every_automated_check_passes_on_the_real_data(dataset: CompanyDataset) 
     assert (dataset.checks["check"] == "quarters_sum_to_year").sum() == 3
 
 
-def test_registry_rows_cover_the_four_series(dataset: CompanyDataset) -> None:
+def test_registry_rows_cover_every_displayed_series(dataset: CompanyDataset) -> None:
     assert {r.series_id for r in dataset.registry_records} == {
         f"sec_xbrl.msft.{name}.quarterly"
-        for name in ("revenue", "operating_cash_flow", "cash_capex", "base_fcf")
+        for name in (
+            "revenue",
+            "operating_cash_flow",
+            "cash_capex",
+            "base_fcf",
+            "capital_intensity",
+            "cash_reinvestment_rate",
+            "fcf_margin",
+            "revenue_yoy_growth",
+        )
     }

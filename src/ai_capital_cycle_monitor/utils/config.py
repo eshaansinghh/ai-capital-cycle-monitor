@@ -9,7 +9,7 @@ import yaml
 from pydantic import BaseModel
 
 from ai_capital_cycle_monitor.schemas.config import Company, EventDefinition, MetricDefinition
-from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField, FieldMapping
+from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField, FieldMapping, LeaseAdjustment
 from ai_capital_cycle_monitor.utils.paths import CONFIG_DIR
 
 
@@ -64,3 +64,15 @@ def load_xbrl_mappings(
         }
         for ticker, fields in tickers.items()
     }
+
+
+def load_lease_adjustments(
+    path: Path = CONFIG_DIR / "xbrl_mappings.yml",
+) -> dict[str, LeaseAdjustment]:
+    """Reviewed lease treatments by ticker. A ticker absent here has no lease adjustment."""
+    with path.open(encoding="utf-8") as handle:
+        document = yaml.safe_load(handle)
+    entries = (document or {}).get("lease_adjustments") or {}
+    if not isinstance(entries, dict):
+        raise ValueError(f"{path.name} 'lease_adjustments' must be a mapping by ticker")
+    return {ticker: LeaseAdjustment.model_validate(entry) for ticker, entry in entries.items()}

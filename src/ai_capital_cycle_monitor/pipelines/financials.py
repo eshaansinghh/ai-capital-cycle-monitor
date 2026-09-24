@@ -7,7 +7,17 @@ from typing import Any
 
 import pandas as pd
 
-from ai_capital_cycle_monitor.analysis.fcf import base_fcf
+from ai_capital_cycle_monitor.analysis.fcf import (
+    base_fcf,
+    capex_including_finance_leases,
+    lease_adjusted_fcf,
+)
+from ai_capital_cycle_monitor.analysis.ratios import (
+    capital_intensity,
+    cash_reinvestment_rate,
+    fcf_margin,
+    year_over_year_growth,
+)
 from ai_capital_cycle_monitor.clients.raw_store import Snapshot
 from ai_capital_cycle_monitor.clients.sec import company_facts_url, filing_index_url
 from ai_capital_cycle_monitor.pipelines.checks import CheckResult, CheckStatus
@@ -16,7 +26,13 @@ from ai_capital_cycle_monitor.pipelines.quarters import QuarterValue, derive_qua
 from ai_capital_cycle_monitor.pipelines.xbrl import SelectedFact, extract_facts, select_facts
 from ai_capital_cycle_monitor.schemas.config import Company
 from ai_capital_cycle_monitor.schemas.provenance import DataBasis, SourceRecord, SourceType
-from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField, FieldMapping
+from ai_capital_cycle_monitor.schemas.xbrl import (
+    REQUIRED_FIELDS,
+    CanonicalField,
+    FieldMapping,
+    LeaseAdjustment,
+    OtherPaymentsTreatment,
+)
 from ai_capital_cycle_monitor.utils.fiscal import fiscal_label, fiscal_period_for_end
 
 PERIOD_KEY = ["fiscal_year", "fiscal_quarter"]
@@ -30,6 +46,40 @@ CHECK_COLUMNS = [
     "expected",
     "actual",
 ]
+
+# column -> (formula, unit, note). Every one that has values is registered in the source registry.
+DERIVED_SERIES: dict[str, tuple[str, str, str]] = {
+    "base_fcf": (
+        "operating_cash_flow - cash_capex",
+        "USD",
+        "Standardised base free cash flow calculated by this project. No company-reported "
+        "free-cash-flow measure is used.",
+    ),
+    "lease_adjusted_fcf": (
+        "base_fcf - finance_lease_principal - other_infrastructure_financing_payments",
+        "USD",
+        "Only where the finance-lease cash flows are disclosed. A component that is not "
+        "disclosed is never assumed to be zero; see the company's lease treatment.",
+    ),
+    "capex_incl_finance_leases": (
+        "cash_capex + finance_lease_assets_acquired",
+        "USD",
+        "Supplementary and not part of the FCF definitions. Finance-lease assets include every "
+        "asset class the company discloses, so this is an upper-bound view of investment.",
+    ),
+    "capital_intensity": ("cash_capex / revenue", "ratio", "Missing when revenue is not positive."),
+    "cash_reinvestment_rate": (
+        "cash_capex / operating_cash_flow",
+        "ratio",
+        "Missing when operating cash flow is zero or negative.",
+    ),
+    "fcf_margin": ("base_fcf / revenue", "ratio", "Missing when revenue is not positive."),
+    "revenue_yoy_growth": (
+        "revenue / revenue in the same fiscal quarter one year earlier - 1",
+        "ratio",
+        "Fiscal quarters are compared with the same fiscal quarter, never a shifted row.",
+    ),
+}
 
 
 class DatasetError(RuntimeError):
@@ -45,6 +95,7 @@ class CompanyDataset:
     registry_records: list[SourceRecord]
     source_url: str
     retrieved_at_utc: datetime
+    lease_adjustment: LeaseAdjustment | None = None
 
 
 def _from_fiscal_year(
@@ -130,7 +181,30 @@ def _long_frame(
     return frame
 
 
-def _quarterly_frame(company: Company, long: pd.DataFrame, snapshot: Snapshot) -> pd.DataFrame:
+def _derived_basis(series: pd.Series) -> pd.Series:
+    return pd.Series(
+        [DataBasis.DERIVED.value if present else None for present in series.notna()],
+        index=series.index,
+        dtype="string",
+    )
+
+
+def _revenue_growth(quarterly: pd.DataFrame) -> pd.Series:
+    """Growth against the same fiscal quarter one fiscal year earlier, matched by label."""
+    prior = quarterly[[*PERIOD_KEY, "revenue"]].copy()
+    prior["fiscal_year"] = prior["fiscal_year"] + 1
+    matched = quarterly[PERIOD_KEY].merge(prior, on=PERIOD_KEY, how="left")
+    growth = year_over_year_growth(quarterly["revenue"], matched["revenue"])
+    growth.index = quarterly.index
+    return growth
+
+
+def _quarterly_frame(
+    company: Company,
+    long: pd.DataFrame,
+    snapshot: Snapshot,
+    lease: LeaseAdjustment | None,
+) -> pd.DataFrame:
     fields = [field.value for field in CanonicalField]
     indexed = long.set_index(PERIOD_KEY)
     values = pd.concat({f: indexed.loc[indexed["field"] == f, "value"] for f in fields}, axis=1)
@@ -139,16 +213,46 @@ def _quarterly_frame(company: Company, long: pd.DataFrame, snapshot: Snapshot) -
     )
     grouped = long.groupby(PERIOD_KEY)
     quarterly = pd.concat([values, bases], axis=1)
+    for field in fields:
+        quarterly[field] = quarterly[field].astype("Int64")
+        quarterly[f"{field}_basis"] = quarterly[f"{field}_basis"].astype("string")
     quarterly["period_start"] = grouped["period_start"].min()
     quarterly["period_end"] = grouped["period_end"].max()
     quarterly["filed_latest"] = grouped["filed_latest"].max()
-    quarterly["base_fcf"] = base_fcf(quarterly["operating_cash_flow"], quarterly["cash_capex"])
-    quarterly["base_fcf_basis"] = pd.Series(
-        [DataBasis.DERIVED.value if present else None for present in quarterly["base_fcf"].notna()],
-        index=quarterly.index,
-        dtype="string",
-    )
     quarterly = quarterly.sort_index().reset_index()
+
+    quarterly["base_fcf"] = base_fcf(quarterly["operating_cash_flow"], quarterly["cash_capex"])
+    quarterly["base_fcf_basis"] = _derived_basis(quarterly["base_fcf"])
+
+    if lease is None:
+        quarterly["lease_adjusted_fcf"] = pd.array([pd.NA] * len(quarterly), dtype="Int64")
+    else:
+        other = (
+            quarterly["other_infrastructure_financing_payments"]
+            if lease.other_infrastructure_financing_payments is OtherPaymentsTreatment.MAPPED
+            else None
+        )
+        quarterly["lease_adjusted_fcf"] = lease_adjusted_fcf(
+            quarterly["base_fcf"], quarterly["finance_lease_principal"], other
+        )
+    quarterly["lease_adjusted_fcf_basis"] = _derived_basis(quarterly["lease_adjusted_fcf"])
+
+    quarterly["capex_incl_finance_leases"] = capex_including_finance_leases(
+        quarterly["cash_capex"], quarterly["finance_lease_assets_acquired"]
+    )
+    quarterly["capex_incl_finance_leases_basis"] = _derived_basis(
+        quarterly["capex_incl_finance_leases"]
+    )
+
+    quarterly["capital_intensity"] = capital_intensity(
+        quarterly["cash_capex"], quarterly["revenue"]
+    )
+    quarterly["cash_reinvestment_rate"] = cash_reinvestment_rate(
+        quarterly["cash_capex"], quarterly["operating_cash_flow"]
+    )
+    quarterly["fcf_margin"] = fcf_margin(quarterly["base_fcf"], quarterly["revenue"])
+    quarterly["revenue_yoy_growth"] = _revenue_growth(quarterly)
+
     quarterly.insert(0, "ticker", company.ticker)
     quarterly.insert(
         3,
@@ -184,6 +288,34 @@ def _identity_checks(report: IdentityReport) -> list[CheckResult]:
             f"expected {check.expected}, SEC reports {check.found}",
         )
         for check in report.checks
+    ]
+
+
+def _lease_checks(quarterly: pd.DataFrame) -> list[CheckResult]:
+    """Every quarter that has base FCF should also have a lease-adjusted figure."""
+    gaps = quarterly[quarterly["base_fcf"].notna() & quarterly["lease_adjusted_fcf"].isna()]
+    if gaps.empty:
+        checked = int(quarterly["lease_adjusted_fcf"].notna().sum())
+        return [
+            CheckResult(
+                "lease_adjustment_coverage",
+                "lease_adjusted_fcf",
+                None,
+                None,
+                CheckStatus.PASS,
+                f"{checked} quarters have lease-adjusted FCF wherever base FCF exists",
+            )
+        ]
+    return [
+        CheckResult(
+            "lease_adjustment_coverage",
+            "lease_adjusted_fcf",
+            int(row["fiscal_year"]),
+            int(row["fiscal_quarter"]),
+            CheckStatus.WARN,
+            "base FCF exists but a lease component is missing, so lease-adjusted FCF is missing",
+        )
+        for _, row in gaps.iterrows()
     ]
 
 
@@ -228,26 +360,58 @@ def _registry_records(
                 notes=" ".join(filter(None, [note, mapping.notes])),
             )
         )
-    fcf = quarterly[quarterly["base_fcf"].notna()]
-    if fcf.empty:
-        raise DatasetError(f"{company.ticker} base_fcf: no observations were produced")
-    records.append(
-        SourceRecord(
-            **common,
-            series_id=series_id(company.ticker, "base_fcf"),
-            period_start=fcf["period_start"].min().date(),
-            period_end=fcf["period_end"].max().date(),
-            filed_or_published_date=fcf["filed_latest"].max().date(),
-            unit="USD",
-            reported_or_estimated=DataBasis.DERIVED,
-            transformation="operating_cash_flow - cash_capex",
-            notes=(
-                "Standardised base free cash flow calculated by this project. No company-reported "
-                "free-cash-flow measure is used."
-            ),
+    for column, (formula, unit, note) in DERIVED_SERIES.items():
+        present = quarterly[quarterly[column].notna()]
+        if present.empty:
+            if column == "base_fcf":
+                raise DatasetError(f"{company.ticker} base_fcf: no observations were produced")
+            continue
+        records.append(
+            SourceRecord(
+                **common,
+                series_id=series_id(company.ticker, column),
+                period_start=present["period_start"].min().date(),
+                period_end=present["period_end"].max().date(),
+                filed_or_published_date=present["filed_latest"].max().date(),
+                unit=unit,
+                reported_or_estimated=DataBasis.DERIVED,
+                transformation=formula,
+                notes=note,
+            )
         )
-    )
     return records
+
+
+def _validate_lease_configuration(
+    company: Company,
+    mappings: dict[CanonicalField, FieldMapping],
+    lease: LeaseAdjustment | None,
+) -> None:
+    principal = CanonicalField.FINANCE_LEASE_PRINCIPAL in mappings
+    other = CanonicalField.OTHER_INFRASTRUCTURE_FINANCING_PAYMENTS in mappings
+    if lease is None:
+        if principal:
+            raise DatasetError(
+                f"{company.ticker} maps finance_lease_principal but has no reviewed lease "
+                "adjustment entry; state whether other infrastructure payments exist"
+            )
+        if other:
+            raise DatasetError(
+                f"{company.ticker} maps other infrastructure payments without finance-lease "
+                "principal, so lease-adjusted FCF cannot be formed"
+            )
+        return
+    if not principal:
+        raise DatasetError(
+            f"{company.ticker} has a lease adjustment entry but no principal mapping"
+        )
+    mapped = lease.other_infrastructure_financing_payments is OtherPaymentsTreatment.MAPPED
+    if mapped and not other:
+        raise DatasetError(f"{company.ticker} declares other payments mapped but has no mapping")
+    if not mapped and other:
+        raise DatasetError(
+            f"{company.ticker} declares no other payments but maps other_infrastructure_payments"
+        )
 
 
 def build_company_dataset(
@@ -256,17 +420,21 @@ def build_company_dataset(
     company_facts: dict[str, Any],
     snapshot: Snapshot,
     identity: IdentityReport | None = None,
+    lease: LeaseAdjustment | None = None,
 ) -> CompanyDataset:
     """Extract, select, derive and assemble every mapped field for one company."""
     if company.cik is None:
         raise DatasetError(f"{company.ticker} has no CIK, so it has no SEC filings to read")
-    missing = [field.value for field in CanonicalField if field not in mappings]
+    missing = [field.value for field in REQUIRED_FIELDS if field not in mappings]
     if missing:
         raise DatasetError(f"{company.ticker} has no XBRL mapping for: {', '.join(missing)}")
+    _validate_lease_configuration(company, mappings, lease)
 
     quarters: list[QuarterValue] = []
     checks: list[CheckResult] = _identity_checks(identity) if identity else []
     for field in CanonicalField:
+        if field not in mappings:
+            continue
         mapping = mappings[field]
         facts = extract_facts(company_facts, mapping.candidates, unit=mapping.unit)
         field_quarters, field_checks = derive_quarters(
@@ -285,7 +453,9 @@ def build_company_dataset(
         raise DatasetError(f"{company.ticker}: no quarterly facts found for the mapped tags")
 
     long = _long_frame(company, quarters, mappings, snapshot)
-    quarterly = _quarterly_frame(company, long, snapshot)
+    quarterly = _quarterly_frame(company, long, snapshot, lease)
+    if lease is not None:
+        checks.extend(_lease_checks(quarterly))
     return CompanyDataset(
         ticker=company.ticker,
         long=long,
@@ -294,4 +464,5 @@ def build_company_dataset(
         registry_records=_registry_records(company, mappings, long, quarterly, snapshot),
         source_url=snapshot.url,
         retrieved_at_utc=snapshot.retrieved_at_utc,
+        lease_adjustment=lease,
     )

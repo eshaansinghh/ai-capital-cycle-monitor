@@ -79,8 +79,17 @@ def test_registry_records_cover_each_field_and_base_fcf() -> None:
     records = {r.series_id: r for r in _build().registry_records}
     assert set(records) == {
         series_id("TEST", name)
-        for name in ("revenue", "operating_cash_flow", "cash_capex", "base_fcf")
+        for name in (
+            "revenue",
+            "operating_cash_flow",
+            "cash_capex",
+            "base_fcf",
+            "capital_intensity",
+            "cash_reinvestment_rate",
+            "fcf_margin",
+        )
     }
+    assert records[series_id("TEST", "capital_intensity")].transformation == "cash_capex / revenue"
     assert records[series_id("TEST", "base_fcf")].reported_or_estimated is DataBasis.DERIVED
     revenue = records[series_id("TEST", "revenue")]
     assert revenue.reported_or_estimated is DataBasis.DERIVED  # Q4 is a difference

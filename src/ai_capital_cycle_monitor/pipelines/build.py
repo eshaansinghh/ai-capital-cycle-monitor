@@ -7,8 +7,12 @@ from ai_capital_cycle_monitor.pipelines.datasets import write_dataset
 from ai_capital_cycle_monitor.pipelines.financials import CompanyDataset, build_company_dataset
 from ai_capital_cycle_monitor.pipelines.identity import IdentityReport, verify_company_identity
 from ai_capital_cycle_monitor.schemas.config import Company
-from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField, FieldMapping
-from ai_capital_cycle_monitor.utils.config import load_companies, load_xbrl_mappings
+from ai_capital_cycle_monitor.schemas.xbrl import CanonicalField, FieldMapping, LeaseAdjustment
+from ai_capital_cycle_monitor.utils.config import (
+    load_companies,
+    load_lease_adjustments,
+    load_xbrl_mappings,
+)
 from ai_capital_cycle_monitor.utils.registry import upsert_source_records
 
 
@@ -54,6 +58,7 @@ def build_company(
     refresh: bool = False,
     companies: list[Company] | None = None,
     mappings: dict[str, dict[CanonicalField, FieldMapping]] | None = None,
+    lease_adjustments: dict[str, LeaseAdjustment] | None = None,
 ) -> CompanyDataset:
     company = find_company(ticker, companies)
     cik = company.cik
@@ -71,8 +76,14 @@ def build_company(
         raise BuildError(f"{company.ticker} identifiers disagree with the SEC record: {failed}")
 
     snapshot = client.company_facts(cik, refresh=refresh)
+    leases = lease_adjustments if lease_adjustments is not None else load_lease_adjustments()
     dataset = build_company_dataset(
-        company, field_mappings, snapshot.read_json(), snapshot, identity=report
+        company,
+        field_mappings,
+        snapshot.read_json(),
+        snapshot,
+        identity=report,
+        lease=leases.get(company.ticker),
     )
     write_dataset(dataset, data_dir)
     upsert_source_records(dataset.registry_records, data_dir / "source_registry.csv")

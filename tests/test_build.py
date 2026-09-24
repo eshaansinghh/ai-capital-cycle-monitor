@@ -94,7 +94,18 @@ def test_build_writes_datasets_registry_rows_and_raw_snapshots(data_dir: Path) -
 
     registry = {r.series_id for r in load_source_registry(data_dir / "source_registry.csv")}
     assert "sec_xbrl.test.base_fcf.quarterly" in registry
-    assert len(registry) == 4
+    assert registry == {
+        f"sec_xbrl.test.{name}.quarterly"
+        for name in (
+            "revenue",
+            "operating_cash_flow",
+            "cash_capex",
+            "base_fcf",
+            "capital_intensity",
+            "cash_reinvestment_rate",
+            "fcf_margin",
+        )
+    }  # one synthetic year has no year-ago quarter, so no growth series
 
     assert session.requested == [
         COMPANY_TICKERS_URL,
