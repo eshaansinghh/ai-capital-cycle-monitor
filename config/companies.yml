@@ -15,9 +15,13 @@ companies:
     currency: USD
     filer_type: domestic_10k
     cik: "0000789019"
-    cik_verified: false
+    cik_verified: true
     fiscal_year_end_month: 6
     fiscal_calendar_note: Fiscal year ends 30 June.
+    notes: >-
+      Verified on 2026-09-24 with `ai-capital-cycle verify-identity MSFT`: CIK, ticker,
+      exchange and fiscal year-end month all match the SEC company_tickers.json and
+      submissions record (SEC name MICROSOFT CORP, SIC 7372).
 
   - ticker: GOOGL
     name: Alphabet Inc.
