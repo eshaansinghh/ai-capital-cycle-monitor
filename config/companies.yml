@@ -1,0 +1,86 @@
+# Investable universe: identifiers and fiscal calendars only. No financial values belong here.
+#
+# cik_verified stays false until the CIK has been checked against the SEC company-tickers map
+# (planned for the Phase 2 vertical slice); the check date is then recorded in `notes`.
+#
+# Deliberately not yet included (documented in docs/limitations.md):
+#   - European banks: the data-source strategy is unresolved (most file only annual 20-F or
+#     nothing with the SEC). Deferred to Phase 4.
+#   - Nebius (NBIS): a foreign private issuer with different forms and taxonomy. Stretch item.
+companies:
+  - ticker: MSFT
+    name: Microsoft Corporation
+    role: hyperscaler
+    exchange: NASDAQ
+    currency: USD
+    filer_type: domestic_10k
+    cik: "0000789019"
+    cik_verified: false
+    fiscal_year_end_month: 6
+    fiscal_calendar_note: Fiscal year ends 30 June.
+
+  - ticker: GOOGL
+    name: Alphabet Inc.
+    role: hyperscaler
+    exchange: NASDAQ
+    currency: USD
+    filer_type: domestic_10k
+    cik: "0001652044"
+    cik_verified: false
+    fiscal_year_end_month: 12
+    fiscal_calendar_note: Calendar fiscal year.
+
+  - ticker: AMZN
+    name: Amazon.com, Inc.
+    role: hyperscaler
+    exchange: NASDAQ
+    currency: USD
+    filer_type: domestic_10k
+    cik: "0001018724"
+    cik_verified: false
+    fiscal_year_end_month: 12
+    fiscal_calendar_note: Calendar fiscal year.
+
+  - ticker: META
+    name: Meta Platforms, Inc.
+    role: hyperscaler
+    exchange: NASDAQ
+    currency: USD
+    filer_type: domestic_10k
+    cik: "0001326801"
+    cik_verified: false
+    fiscal_year_end_month: 12
+    fiscal_calendar_note: Calendar fiscal year.
+
+  - ticker: ORCL
+    name: Oracle Corporation
+    role: hyperscaler
+    exchange: NYSE
+    currency: USD
+    filer_type: domestic_10k
+    cik: "0001341439"
+    cik_verified: false
+    fiscal_year_end_month: 5
+    fiscal_calendar_note: Fiscal year ends 31 May.
+
+  - ticker: NVDA
+    name: NVIDIA Corporation
+    role: infrastructure
+    exchange: NASDAQ
+    currency: USD
+    filer_type: domestic_10k
+    cik: "0001045810"
+    cik_verified: false
+    fiscal_year_end_month: 1
+    fiscal_calendar_note: Fiscal year ends on the last Sunday of January.
+
+  - ticker: CRWV
+    name: CoreWeave, Inc.
+    role: neocloud
+    exchange: NASDAQ
+    currency: USD
+    filer_type: domestic_10k
+    cik: "0001769628"
+    cik_verified: false
+    fiscal_year_end_month: 12
+    fiscal_calendar_note: Calendar fiscal year. Short public filing history (listed 2025).

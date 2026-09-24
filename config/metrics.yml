@@ -1,0 +1,63 @@
+# Standardised metric definitions. The canonical input field names are finalised with the
+# financial schema in Phase 2. Company-reported, standardised and lease-adjusted FCF are always
+# kept in separate columns and never blended.
+#
+# Missing is not zero: if any input is missing, the metric is missing. A metric is also missing
+# (null, never infinity or zero) when its denominator is zero, or non-positive where noted.
+metrics:
+  - id: base_fcf
+    name: Base free cash flow
+    formula: operating_cash_flow - cash_capex
+    inputs: [operating_cash_flow, cash_capex]
+    unit: currency
+    notes: cash_capex is cash purchases of property and equipment, entered as a positive outflow.
+
+  - id: lease_adjusted_fcf
+    name: Lease-adjusted free cash flow
+    formula: base_fcf - finance_lease_principal - other_infrastructure_financing_payments
+    inputs: [base_fcf, finance_lease_principal, other_infrastructure_financing_payments]
+    unit: currency
+    notes: >-
+      Deducts finance-lease principal and other infrastructure financing payments only where the
+      company discloses them. A disclosed zero is zero; an undisclosed component leaves the
+      metric missing.
+
+  - id: capital_intensity
+    name: Capital intensity
+    formula: cash_capex / revenue
+    inputs: [cash_capex, revenue]
+    unit: ratio
+
+  - id: cash_reinvestment_rate
+    name: Cash reinvestment rate
+    formula: cash_capex / operating_cash_flow
+    inputs: [cash_capex, operating_cash_flow]
+    unit: ratio
+    notes: Missing when operating cash flow is zero or negative.
+
+  - id: fcf_margin
+    name: Free cash flow margin
+    formula: base_fcf / revenue
+    inputs: [base_fcf, revenue]
+    unit: ratio
+
+  - id: incremental_cash_conversion
+    name: Incremental cash conversion
+    formula: change_in_fcf / change_in_revenue
+    inputs: [change_in_fcf, change_in_revenue]
+    unit: ratio
+    notes: Missing when the change in revenue is zero. Sign is interpreted with care near zero.
+
+  - id: fcf_yield
+    name: Free cash flow yield
+    formula: ltm_fcf / market_cap
+    inputs: [ltm_fcf, market_cap]
+    unit: ratio
+    notes: ltm_fcf is the sum of the last four reported quarters of the chosen FCF definition.
+
+  - id: net_debt
+    name: Net debt
+    formula: total_debt - cash_and_short_term_investments
+    inputs: [total_debt, cash_and_short_term_investments]
+    unit: currency
+    notes: Lease liabilities are reported separately and not included in total_debt.

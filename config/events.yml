@@ -1,0 +1,23 @@
+# Event-study catalogue. Intentionally empty in Phase 1.
+#
+# An event may be added only after its first public timestamp has been verified against a primary
+# source and its confounder log (earnings, macro releases, other company news inside the event
+# window) has been completed. The METR / Hugging Face investigation is a candidate but is not
+# listed until that verification is done. After-hours and weekend timestamps are shifted to the
+# next trading session by the event-study module, not here: record the raw first public timestamp.
+#
+# Shape of an entry (see schemas/config.py::EventDefinition):
+#   - event_id: snake_case_identifier
+#     title: Short factual title
+#     first_public_timestamp_utc: <ISO 8601 timestamp with timezone>
+#     source_url: <primary-source URL>
+#     source_type: <a source_type from schemas/provenance.py>
+#     exposed_tickers: [<tickers listed in companies.yml>]
+#     benchmark_tickers: [<market and sector benchmark tickers>]
+#     confounders:
+#       - date: <YYYY-MM-DD>
+#         description: <what else happened>
+#         source_url: <URL>
+#     anticipated: <true | false | null when unknown>
+#     status: candidate
+events: []
