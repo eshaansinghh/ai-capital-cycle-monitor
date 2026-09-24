@@ -1,0 +1,46 @@
+[project]
+name = "ai-capital-cycle-monitor"
+version = "0.1.0"
+description = "Public-markets research platform testing whether AI-related market expectations are supported by capital efficiency, free cash flow and infrastructure economics."
+readme = "README.md"
+authors = [
+    { name = "eshaansinghh", email = "eshaansinghh@users.noreply.github.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fredapi>=0.5.2",
+    "pandas>=2.2",
+    "plotly>=5.24",
+    "pyarrow>=16.0",
+    "pydantic>=2.8",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "requests>=2.32",
+    "requests-cache>=1.2",
+    "scipy>=1.13",
+    "statsmodels>=0.14",
+    "streamlit>=1.40",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "app"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
